@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
+import { VillageScene } from "./scenes/VillageScene";
 
 export function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -18,7 +19,11 @@ export function GameCanvas() {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
-      scene: [BootScene],
+      physics: {
+        default: "arcade",
+        arcade: { debug: false },
+      },
+      scene: [BootScene, VillageScene],
     });
 
     return () => {

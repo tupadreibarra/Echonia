@@ -1,0 +1,13 @@
+{
+  "id": "greet.greetings.hello",
+  "skillStrand": "conversation",
+  "topic": "greetings",
+  "ageRange": [4, 12],
+  "difficultyTier": 1,
+  "englishText": "Hello",
+  "spanishText": "Hola",
+  "audioUrl": "audio/greetings/hello.mp3",
+  "phoneticHint": "heh-LOH",
+  "activityTypes": ["select-audio"],
+  "distractorPool": "auto"
+}

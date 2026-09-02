@@ -1,0 +1,13 @@
+{
+  "id": "greet.greetings.my-name-is",
+  "skillStrand": "conversation",
+  "topic": "greetings",
+  "ageRange": [4, 12],
+  "difficultyTier": 1,
+  "englishText": "My name is...",
+  "spanishText": "Me llamo...",
+  "audioUrl": "audio/greetings/my-name-is.mp3",
+  "phoneticHint": "my naym iz",
+  "activityTypes": ["select-audio"],
+  "distractorPool": "auto"
+}
