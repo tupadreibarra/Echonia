@@ -96,7 +96,7 @@ export function DialogueBox() {
               cursor: "pointer",
             }}
           >
-            🔊 Replay
+            Replay
           </button>
         ) : (
           <span />
