@@ -12,6 +12,22 @@ export interface DialogueLine {
   replay?: { contentItemId: string; audioUrl: string };
 }
 
+// One vocabulary-matching option shown on a Select-Image challenge card.
+// Labeled with Spanish (not English) so matching the English prompt audio to
+// its card is a real vocabulary task — see Phase 2's Learning Integration.
+export interface ChallengeOption {
+  contentItemId: string;
+  englishText: string;
+  spanishText: string;
+}
+
+export interface ChallengeStartPayload {
+  playerId: string;
+  target: { contentItemId: string; englishText: string; audioUrl: string };
+  /** All same-topic items, target included — the "auto" distractor pool. */
+  options: ChallengeOption[];
+}
+
 // The one channel Phaser (game world) and React (UI chrome) are allowed to
 // talk through — neither side reaches into the other's state directly.
 export interface EchoniaEvents {
@@ -24,6 +40,10 @@ export interface EchoniaEvents {
   "dialogue:start": { lines: DialogueLine[] };
   /** React -> Phaser: the dialogue box was closed, resume movement. */
   "dialogue:closed": Record<string, never>;
+  /** Phaser -> React: open a Select-Image challenge for this word orb. */
+  "challenge:start": ChallengeStartPayload;
+  /** React -> Phaser: the challenge resolved and closed; mark the orb done. */
+  "challenge:closed": { contentItemId: string };
 }
 
 class TypedEventBus extends Phaser.Events.EventEmitter {

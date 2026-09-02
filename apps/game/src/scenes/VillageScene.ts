@@ -1,5 +1,7 @@
 import Phaser from "phaser";
-import { eventBus, type DialogueLine } from "../bridge/eventBus";
+import type { ContentItem, MasteryRecord, Player } from "@echonia/shared-types";
+import { eventBus, type ChallengeOption, type DialogueLine } from "../bridge/eventBus";
+import { resolveAvatarColor } from "../player/avatarColors";
 
 interface Npc {
   id: string;
@@ -10,6 +12,19 @@ interface Npc {
   rangeZone: Phaser.GameObjects.Arc;
 }
 
+interface Orb {
+  contentItemId: string;
+  englishText: string;
+  spanishText: string;
+  audioUrl: string;
+  x: number;
+  y: number;
+  shape: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
+  rangeZone: Phaser.GameObjects.Arc;
+  resolved: boolean;
+}
+
 interface WasdKeys {
   W: Phaser.Input.Keyboard.Key;
   A: Phaser.Input.Keyboard.Key;
@@ -18,38 +33,68 @@ interface WasdKeys {
 }
 
 const TALK_RANGE = 64;
+const ORB_RANGE = 40;
 const PLAYER_SPEED = 180;
 const CLICK_MOVE_STOP_DISTANCE = 6;
 
 /**
  * The Emberhollow hub. Placeholder shapes stand in for real art per Phase 0
- * §29 — every prop/NPC here occupies the position real sprites will later
- * take, so swapping them in is an asset change, not a rewrite of this scene.
+ * §29 — every prop/NPC/orb here occupies the position real sprites will
+ * later take, so swapping them in is an asset change, not a rewrite of this
+ * scene.
  */
 export class VillageScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Arc;
+  private playerLabel!: Phaser.GameObjects.Text;
+  private playerId: string | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasdKeys!: WasdKeys;
   private walkTarget: { x: number; y: number } | null = null;
   private npcs: Npc[] = [];
   private npcInRangeId: string | null = null;
+  private orbs: Orb[] = [];
   private dialogueOpen = false;
+  private challengeOpen = false;
+  private questAcknowledged = false;
+
+  // Guards async callbacks (the mastery-record fetch below) against firing
+  // after this scene/game has been torn down — same StrictMode double-mount
+  // hazard BootScene's content fetch hit in Phase 6.
+  private active = true;
 
   constructor() {
     super("VillageScene");
   }
 
   create(): void {
+    this.active = true;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.active = false;
+    });
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      this.active = false;
+    });
+
     const { width, height } = this.scale;
 
     this.cameras.main.setBackgroundColor("#2f6b3f"); // village green
 
     this.physics.world.setBounds(0, 0, width, height);
 
-    // Player (created before props/NPCs so their colliders can reference it).
-    this.player = this.add.circle(width / 2, height * 0.8, 16, 0x5fe0d1);
+    const player = this.game.registry.get("player") as Player | undefined;
+    this.playerId = player?.id ?? null;
+    const avatarColor = resolveAvatarColor(player?.avatarChoice);
+
+    // Player (created before props/NPCs/orbs so their colliders can reference it).
+    this.player = this.add.circle(width / 2, height * 0.8, 16, avatarColor);
     this.physics.add.existing(this.player);
     (this.player.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
+    this.playerLabel = this.add
+      .text(this.player.x, this.player.y - 28, player?.displayName ?? "Hero", {
+        fontSize: "11px",
+        color: "#e9e4ef",
+      })
+      .setOrigin(0.5);
 
     // Static props (well, fence post, sign, closed gate).
     this.addProp(width * 0.3, height * 0.35, 28, 0x6b7280, "Well");
@@ -66,11 +111,20 @@ export class VillageScene extends Phaser.Scene {
       this.physics.add.collider(this.player, npc.body);
     }
 
+    // The three word-orbs for "The Wizard's Missing Words" — one per
+    // everyday-objects ContentItem. Positions chosen to stay clear of the
+    // props/NPCs above.
+    this.orbs = [
+      this.buildOrb("vocab.everyday-objects.apple", width * 0.35, height * 0.65, 0xe0574a),
+      this.buildOrb("vocab.everyday-objects.dog", width * 0.5, height * 0.2, 0x8b5e34),
+      this.buildOrb("vocab.everyday-objects.book", width * 0.85, height * 0.75, 0x4a7fe0),
+    ].filter((orb): orb is Orb => orb !== null);
+
     // Desktop input: arrow keys + WASD.
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasdKeys = this.input.keyboard!.addKeys("W,S,A,D") as unknown as WasdKeys;
     this.input.keyboard!.on("keydown-E", () => {
-      if (this.npcInRangeId && !this.dialogueOpen) {
+      if (this.npcInRangeId && !this.dialogueOpen && !this.challengeOpen) {
         this.startDialogue(this.npcInRangeId);
       }
     });
@@ -79,28 +133,38 @@ export class VillageScene extends Phaser.Scene {
     // events, so this one handler covers both desktop click and tablet tap
     // per Phase 0's touch-friendly requirement — no separate virtual joystick.
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.dialogueOpen) return;
+      if (this.dialogueOpen || this.challengeOpen) return;
       this.walkTarget = { x: pointer.worldX, y: pointer.worldY };
     });
 
     // React tells us when the Talk prompt was pressed, and when the
-    // dialogue box has been closed (so movement can resume).
+    // dialogue box / challenge box has been closed (so movement can resume).
     eventBus.onTyped("talk:requested", ({ npcId }) => this.startDialogue(npcId));
     eventBus.onTyped("dialogue:closed", () => {
       this.dialogueOpen = false;
     });
+    eventBus.onTyped("challenge:closed", ({ contentItemId }) => this.onChallengeClosed(contentItemId));
+
+    this.loadExistingMastery();
 
     eventBus.emitTyped("sceneReady", { sceneKey: this.scene.key });
   }
 
   update(): void {
-    if (this.dialogueOpen) {
+    if (this.dialogueOpen || this.challengeOpen) {
       (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      this.updatePlayerLabelPosition();
       return;
     }
 
     this.updateMovement();
     this.updateNpcRange();
+    this.updateOrbRange();
+    this.updatePlayerLabelPosition();
+  }
+
+  private updatePlayerLabelPosition(): void {
+    this.playerLabel.setPosition(this.player.x, this.player.y - 28);
   }
 
   private updateMovement(): void {
@@ -160,18 +224,107 @@ export class VillageScene extends Phaser.Scene {
     }
   }
 
+  private updateOrbRange(): void {
+    for (const orb of this.orbs) {
+      if (orb.resolved) continue;
+      if (this.physics.overlap(this.player, orb.rangeZone)) {
+        this.startChallenge(orb);
+        return; // one challenge at a time
+      }
+    }
+  }
+
   private startDialogue(npcId: string): void {
     const lines = npcId === "orin" ? this.orinDialogue() : this.pipDialogue();
     this.dialogueOpen = true;
     eventBus.emitTyped("dialogue:start", { lines });
   }
 
+  private startChallenge(orb: Orb): void {
+    if (!this.playerId) return; // shouldn't happen — App requires a player before the game mounts
+    this.challengeOpen = true;
+    const options: ChallengeOption[] = this.orbs.map((o) => ({
+      contentItemId: o.contentItemId,
+      englishText: o.englishText,
+      spanishText: o.spanishText,
+    }));
+    eventBus.emitTyped("challenge:start", {
+      playerId: this.playerId,
+      target: { contentItemId: orb.contentItemId, englishText: orb.englishText, audioUrl: orb.audioUrl },
+      options,
+    });
+  }
+
+  private onChallengeClosed(contentItemId: string): void {
+    this.challengeOpen = false;
+    const orb = this.orbs.find((o) => o.contentItemId === contentItemId);
+    if (orb) this.markOrbResolved(orb);
+
+    if (this.allOrbsResolved() && !this.questAcknowledged) {
+      this.questAcknowledged = true;
+      this.dialogueOpen = true;
+      eventBus.emitTyped("dialogue:start", { lines: this.orinDialogue() });
+    }
+  }
+
+  private allOrbsResolved(): boolean {
+    return this.orbs.length > 0 && this.orbs.every((orb) => orb.resolved);
+  }
+
+  private markOrbResolved(orb: Orb): void {
+    orb.resolved = true;
+    orb.shape.setAlpha(0.25);
+    orb.label.setAlpha(0.25);
+  }
+
+  /**
+   * Marks orbs already attempted in a previous session as resolved, so
+   * reloading the page doesn't re-offer a challenge the child already
+   * completed — this is Phase 4's reload-persistence requirement, powered
+   * by the mastery records that already have to exist rather than a
+   * separate quest-progress table.
+   */
+  private loadExistingMastery(): void {
+    if (!this.playerId) return;
+    fetch(`/api/mastery?playerId=${encodeURIComponent(this.playerId)}`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`/api/mastery responded ${response.status}`);
+        return response.json() as Promise<MasteryRecord[]>;
+      })
+      .then((records) => {
+        if (!this.active) return;
+        for (const record of records) {
+          const orb = this.orbs.find((o) => o.contentItemId === record.contentItemId);
+          if (orb) this.markOrbResolved(orb);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!this.active) return;
+        console.error("[VillageScene] Could not load existing mastery records:", error);
+      });
+  }
+
+  private getContentItems(): ContentItem[] {
+    const content = this.game.registry.get("content") as { contentItems: ContentItem[] } | undefined;
+    return content?.contentItems ?? [];
+  }
+
+  private findContentItem(id: string): ContentItem | undefined {
+    return this.getContentItems().find((item) => item.id === id);
+  }
+
   private orinDialogue(): DialogueLine[] {
-    const content = this.game.registry.get("content") as
-      | { contentItems: Array<{ id: string; audioUrl: string }> }
-      | undefined;
-    const hello = content?.contentItems.find((item) => item.id === "greet.greetings.hello");
-    const myNameIs = content?.contentItems.find((item) => item.id === "greet.greetings.my-name-is");
+    if (this.allOrbsResolved()) {
+      return [
+        {
+          speaker: "Master Orin",
+          text: "¡Las tres palabras han vuelto a mi conjuro! Gracias por tu ayuda, pequeño héroe.",
+        },
+      ];
+    }
+
+    const hello = this.findContentItem("greet.greetings.hello");
+    const myNameIs = this.findContentItem("greet.greetings.my-name-is");
 
     return [
       { speaker: "Master Orin", text: "¡Hola, pequeño héroe! Bienvenido a Emberhollow. Soy el Maestro Orin." },
@@ -191,10 +344,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private pipDialogue(): DialogueLine[] {
-    const content = this.game.registry.get("content") as
-      | { contentItems: Array<{ id: string; audioUrl: string }> }
-      | undefined;
-    const hello = content?.contentItems.find((item) => item.id === "greet.greetings.hello");
+    const hello = this.findContentItem("greet.greetings.hello");
 
     return [
       {
@@ -235,5 +385,38 @@ export class VillageScene extends Phaser.Scene {
     this.physics.add.existing(rangeZone, true);
 
     return { id, label, x, y, body, rangeZone };
+  }
+
+  private buildOrb(contentItemId: string, x: number, y: number, color: number): Orb | null {
+    const item = this.findContentItem(contentItemId);
+    if (!item) {
+      console.warn(`[VillageScene] Content item "${contentItemId}" not found — skipping its orb.`);
+      return null;
+    }
+
+    const shape = this.add.circle(x, y, 12, color);
+    shape.setStrokeStyle(2, 0xffffff, 0.6);
+    const label = this.add
+      .text(x, y - 22, item.englishText, { fontSize: "11px", color: "#e9e4ef" })
+      .setOrigin(0.5);
+    this.physics.add.existing(shape, true);
+
+    // Same range-zone pattern as NPCs, but sized smaller — orbs auto-open on
+    // proximity rather than needing an explicit Talk-style press.
+    const rangeZone = this.add.circle(x, y, ORB_RANGE, 0xffffff, 0);
+    this.physics.add.existing(rangeZone, true);
+
+    return {
+      contentItemId: item.id,
+      englishText: item.englishText,
+      spanishText: item.spanishText,
+      audioUrl: item.audioUrl,
+      x,
+      y,
+      shape,
+      label,
+      rangeZone,
+      resolved: false,
+    };
   }
 }

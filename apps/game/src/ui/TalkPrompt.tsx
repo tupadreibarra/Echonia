@@ -11,6 +11,7 @@ import { eventBus } from "../bridge/eventBus";
 export function TalkPrompt() {
   const [target, setTarget] = useState<{ npcId: string; label: string } | null>(null);
   const [dialogueOpen, setDialogueOpen] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
 
   useEffect(() => {
     const handleInRange = ({ npcId, label }: { npcId: string | null; label: string | null }) => {
@@ -18,18 +19,24 @@ export function TalkPrompt() {
     };
     const handleDialogueStart = () => setDialogueOpen(true);
     const handleDialogueClosed = () => setDialogueOpen(false);
+    const handleChallengeStart = () => setChallengeOpen(true);
+    const handleChallengeClosed = () => setChallengeOpen(false);
 
     eventBus.onTyped("npc:inRange", handleInRange);
     eventBus.onTyped("dialogue:start", handleDialogueStart);
     eventBus.onTyped("dialogue:closed", handleDialogueClosed);
+    eventBus.onTyped("challenge:start", handleChallengeStart);
+    eventBus.onTyped("challenge:closed", handleChallengeClosed);
     return () => {
       eventBus.offTyped("npc:inRange", handleInRange);
       eventBus.offTyped("dialogue:start", handleDialogueStart);
       eventBus.offTyped("dialogue:closed", handleDialogueClosed);
+      eventBus.offTyped("challenge:start", handleChallengeStart);
+      eventBus.offTyped("challenge:closed", handleChallengeClosed);
     };
   }, []);
 
-  if (!target || dialogueOpen) return null;
+  if (!target || dialogueOpen || challengeOpen) return null;
 
   return (
     <button

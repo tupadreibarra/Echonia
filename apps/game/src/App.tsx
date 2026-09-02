@@ -1,7 +1,18 @@
+import { useState } from "react";
+import type { Player } from "@echonia/shared-types";
 import { GameCanvas } from "./GameCanvas";
-import { TalkPrompt, DialogueBox } from "./ui";
+import { TalkPrompt, DialogueBox, ChallengeBox, CharacterCreation } from "./ui";
+import { loadStoredPlayer } from "./player/playerStorage";
 
 export function App() {
+  // Lazy initial state: reads localStorage synchronously on first render, so
+  // a returning player never sees a flash of the character creation screen.
+  const [player, setPlayer] = useState<Player | null>(() => loadStoredPlayer());
+
+  if (!player) {
+    return <CharacterCreation onCreated={setPlayer} />;
+  }
+
   return (
     <div
       style={{
@@ -17,9 +28,10 @@ export function App() {
           (which is typically larger once centered). Responsive scaling of
           this box is a later-phase polish item. */}
       <div style={{ position: "relative", width: 960, height: 540 }}>
-        <GameCanvas />
+        <GameCanvas player={player} />
         <TalkPrompt />
         <DialogueBox />
+        <ChallengeBox />
       </div>
     </div>
   );
