@@ -93,6 +93,10 @@ Committed: all source, Drizzle schema/migrations, content JSON + placeholder ass
 
 **Changes:** Drizzle's driver/connection string, a few column-type declarations, local file → `DATABASE_URL`. **Stays the same:** schema shape, table relationships, every query written against Drizzle's query builder, all business logic. Realistic effort: a few hours, done once, triggered by an actual need rather than a calendar date.
 
+## Implementation note (added during Phase 5)
+
+The local SQLite driver is **`@libsql/client`**, not `better-sqlite3`. `better-sqlite3` needs a native C++ build (node-gyp + Visual Studio Build Tools), which isn't installed on the dev machine, and no prebuilt binary yet covers this Node version on Windows. `@libsql/client`'s local `file:` mode is a drop-in equivalent — no native compile step, same Drizzle query-builder API via `drizzle-orm/libsql`. Everything else in this document (schema shape, the SQLite → Postgres migration path, the thin `apps/server` layer) is unaffected.
+
 ## Flagged for sign-off
 
 - Drizzle over Prisma (less common, but better dual-dialect fit)
