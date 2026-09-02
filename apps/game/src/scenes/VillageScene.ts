@@ -36,6 +36,12 @@ interface WasdKeys {
 const TALK_RANGE = 64;
 const ORB_RANGE = 40;
 const PUDDLEWUMP_RANGE = 40;
+const GATE_TRIGGER_RANGE = 50;
+// Width of the cosmetic strip just past the gate — not a new region (that's
+// explicitly out of scope), just enough space for the "wider world" the
+// camera pull-back is supposed to glimpse to be something other than the
+// edge of the canvas.
+const GATE_BEYOND_WIDTH = 180;
 const PLAYER_SPEED = 180;
 const CLICK_MOVE_STOP_DISTANCE = 6;
 
@@ -59,6 +65,9 @@ export class VillageScene extends Phaser.Scene {
   private dialogueOpen = false;
   private challengeOpen = false;
   private questAcknowledged = false;
+  private gateOpen = false;
+  private gateMessageShown = false;
+  private gateTriggerZone: Phaser.GameObjects.Arc | null = null;
 
   // Guards async callbacks (the mastery-record fetch below) against firing
   // after this scene/game has been torn down — same StrictMode double-mount
@@ -109,12 +118,15 @@ export class VillageScene extends Phaser.Scene {
     this.dialogueOpen = false;
     this.challengeOpen = false;
     this.puddlewump = null;
+    this.gateMessageShown = false;
 
     const { width, height } = this.scale;
 
     this.cameras.main.setBackgroundColor("#2f6b3f"); // village green
 
-    this.physics.world.setBounds(0, 0, width, height);
+    // Extended past the gate so there's somewhere to actually walk once it
+    // opens — see GATE_BEYOND_WIDTH above.
+    this.physics.world.setBounds(0, 0, width + GATE_BEYOND_WIDTH, height);
 
     const player = this.game.registry.get("player") as Player | undefined;
     this.playerId = player?.id ?? null;
@@ -139,7 +151,25 @@ export class VillageScene extends Phaser.Scene {
     this.addProp(width * 0.3, height * 0.35, 28, 0x6b7280, "Well");
     this.addProp(width * 0.7, height * 0.25, 14, 0x8b5e34, "Fence Post");
     this.addProp(width * 0.15, height * 0.7, 16, 0x8b5e34, "Sign");
-    this.addGate(width - 20, height / 2);
+    // Open once the player has equipped the quest's reward — that's the
+    // completion signal for this MVP's one quest, no separate flag needed.
+    this.addGate(width - 20, height / 2, Boolean(player?.equippedItemId));
+    if (this.gateOpen) {
+      if (!this.game.registry.get("gateOpenMomentPlayed")) {
+        // First time the gate is open this game session (whether that's
+        // "just equipped the reward" or "loaded the page already unlocked")
+        // — animate the reveal.
+        this.game.registry.set("gateOpenMomentPlayed", true);
+        this.cameras.main.setZoom(1);
+        this.playGateOpenCameraMoment();
+      } else {
+        // Already revealed earlier this session (e.g. a return trip from
+        // combat) — stay pulled back, don't replay the animation every visit.
+        this.cameras.main.setZoom(0.85);
+      }
+    } else {
+      this.cameras.main.setZoom(1);
+    }
 
     // NPCs.
     this.npcs = [
@@ -198,6 +228,7 @@ export class VillageScene extends Phaser.Scene {
     this.updateNpcRange();
     this.updateOrbRange();
     this.updatePuddlewumpRange();
+    this.updateGateTrigger();
     this.updatePlayerLabelPosition();
   }
 
@@ -441,13 +472,62 @@ export class VillageScene extends Phaser.Scene {
     this.physics.add.collider(this.player, prop);
   }
 
-  private addGate(x: number, y: number): void {
-    const gate = this.add.rectangle(x, y, 24, 140, 0x5c5580);
+  private addGate(x: number, y: number, isOpen: boolean): void {
+    this.gateOpen = isOpen;
+    const gate = this.add.rectangle(x, y, 24, 140, isOpen ? 0x3a7d3a : 0x5c5580);
     this.physics.add.existing(gate, true);
-    this.physics.add.collider(this.player, gate);
-    this.add.text(x, y - 84, "Gate (closed)", { fontSize: "12px", color: "#e9e4ef" }).setOrigin(0.5);
-    // Static prop only — no unlock logic here, that lands in Phase 10 once
-    // the quest + combat + reward chain that opens it actually exists.
+    if (!isOpen) {
+      this.physics.add.collider(this.player, gate);
+    }
+    this.add
+      .text(x, y - 84, isOpen ? "Gate (open)" : "Gate (closed)", { fontSize: "12px", color: "#e9e4ef" })
+      .setOrigin(0.5);
+
+    // Cosmetic-only strip past the gate (not a new region — see
+    // GATE_BEYOND_WIDTH above) so the pull-back below reveals something
+    // instead of empty canvas, plus a silent trigger zone within it for the
+    // one-line closing beat once the player actually steps through.
+    const beyondX = x + 20 + GATE_BEYOND_WIDTH / 2;
+    this.add.rectangle(beyondX, y, GATE_BEYOND_WIDTH, this.scale.height, 0x3f7a4f).setDepth(-1);
+    this.add
+      .text(beyondX, this.scale.height * 0.15, "The road continues...", { fontSize: "12px", color: "#cfe8d6" })
+      .setOrigin(0.5)
+      .setDepth(-1);
+
+    const triggerZone = this.add.circle(beyondX, y, GATE_TRIGGER_RANGE, 0xffffff, 0);
+    this.physics.add.existing(triggerZone, true);
+    this.gateTriggerZone = triggerZone;
+  }
+
+  /** A brief camera pull-back so more of the map is visibly in view the
+   * moment the gate opens — plays once per running game session (guarded by
+   * a registry flag at the call site), whether that moment is "just equipped
+   * the reward" or "loaded the page with the gate already unlocked." */
+  private playGateOpenCameraMoment(): void {
+    this.tweens.add({
+      targets: this.cameras.main,
+      zoom: 0.85,
+      duration: 600,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private updateGateTrigger(): void {
+    if (!this.gateOpen || this.gateMessageShown || !this.gateTriggerZone) return;
+    if (this.physics.overlap(this.player, this.gateTriggerZone)) {
+      this.gateMessageShown = true;
+      this.dialogueOpen = true;
+      eventBus.emitTyped("dialogue:start", {
+        lines: [
+          {
+            speaker: "Master Orin",
+            text:
+              "El camino más allá de Emberhollow está abierto. Tu aventura apenas comienza... " +
+              "(The path beyond Emberhollow is open. Your adventure has only just begun...)",
+          },
+        ],
+      });
+    }
   }
 
   private addNpc(id: string, label: string, x: number, y: number, color: number): Npc {
