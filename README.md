@@ -7,12 +7,13 @@ This project is being developed in phases. Design and architecture docs are trac
 - **[Phase 0 - Product Definition](docs/phase-0-product-definition.md)**: game concept, core fantasy, first-session flow, classes, world, progression, adaptive difficulty, MVP scope, risks, success criteria.
 - **[Phase 1 - Technical Architecture](docs/phase-1-technical-architecture.md)**: stack decisions (React + Vite, Phaser 3, Fastify + Drizzle, SQLite for local dev with a defined migration path to Postgres/Supabase), repo layout, local dev workflow.
 - **[Phase 2 - Game Design Document](docs/phase-2-game-design-document.md)**: world structure, combat system, class stats, progression formulas, quest structure, rewards, learning integration.
+- **[Phase 3 - Educational Architecture](docs/phase-3-educational-architecture.md)**: age bands, curriculum structure, content schema, the Leitner-style mastery model, adaptive difficulty algorithm, Spanish-fade immersion curve.
 
 Each doc links to a styled, illustrated version published as a Claude artifact; the markdown here is the version tracked in git.
 
 ## Status
 
-Pre-implementation. No application code yet - Phases 0-2 (product, architecture, game design) are complete; Phase 3 (Educational Architecture) is next.
+Pre-implementation. No application code yet - Phases 0-3 (product, architecture, game design, educational architecture) are complete; Phase 4 (MVP Design) is next.
 
 ## Local development
 
