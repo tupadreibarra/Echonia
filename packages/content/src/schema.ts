@@ -58,6 +58,19 @@ export const regionSchema = z.object({
   questIds: z.array(z.string().min(1)),
 });
 
+// Only one slot exists in the MVP (a single accessory reward) — extend this
+// enum when a second gear slot actually needs to exist, not before.
+export const itemSlotSchema = z.enum(["accessory"]);
+
+export const itemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  slot: itemSlotSchema,
+  description: z.string().min(1),
+  visualTint: z.string().regex(/^#[0-9a-fA-F]{6}$/, "visualTint must be a 6-digit hex color"),
+});
+
 export type ContentItemInput = z.infer<typeof contentItemSchema>;
 export type QuestInput = z.infer<typeof questSchema>;
 export type RegionInput = z.infer<typeof regionSchema>;
+export type ItemInput = z.infer<typeof itemSchema>;

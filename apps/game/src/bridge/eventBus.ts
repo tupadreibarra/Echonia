@@ -29,6 +29,15 @@ export interface ChallengeStartPayload {
   options: ChallengeOption[];
 }
 
+export interface RewardStartPayload {
+  xpGained: number;
+  glimmersGained: number;
+  leveledUp: boolean;
+  newLevel: number;
+  /** Absent if the reward carried no item (defensive — every reward in this MVP has one). */
+  item?: { id: string; name: string; description: string; visualTint: string };
+}
+
 // The one channel Phaser (game world) and React (UI chrome) are allowed to
 // talk through — neither side reaches into the other's state directly.
 export interface EchoniaEvents {
@@ -49,6 +58,10 @@ export interface EchoniaEvents {
    * reuse this same box for its own scoring, rather than forking it.
    */
   "challenge:closed": { contentItemId: string; resultTier: ResultTier };
+  /** Phaser -> React: open the reward/level-up screen after a victory. */
+  "reward:start": RewardStartPayload;
+  /** React -> Phaser: the player clicked through the reward screen (and pressed Equip, if there was an item). */
+  "reward:closed": Record<string, never>;
 }
 
 class TypedEventBus extends Phaser.Events.EventEmitter {

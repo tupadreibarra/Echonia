@@ -1,7 +1,13 @@
 import Phaser from "phaser";
-import type { ResultTier } from "@echonia/shared-types";
+import type { Player, ResultTier } from "@echonia/shared-types";
 import { eventBus, type ChallengeOption } from "../bridge/eventBus";
-import { getContentItems } from "../content/getContentItems";
+import { getContentItems, findQuest, findItem } from "../content/getContentItems";
+import { saveStoredPlayer } from "../player/playerStorage";
+
+// The one quest that exists in this MVP — its reward is granted on victory.
+// A named constant rather than a scene-data field since nothing yet needs a
+// different quest to resolve here.
+const QUEST_ID = "wizards-missing-words";
 
 export interface CombatSceneData {
   playerId: string;
@@ -43,6 +49,7 @@ export class CombatScene extends Phaser.Scene {
   // Same StrictMode/scene-teardown guard as VillageScene and BootScene.
   private active = true;
 
+  private playerShape!: Phaser.GameObjects.Arc;
   private enemyShape!: Phaser.GameObjects.Ellipse;
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyHpText!: Phaser.GameObjects.Text;
@@ -60,6 +67,10 @@ export class CombatScene extends Phaser.Scene {
     this.resolvePlayerAttack(payload.resultTier);
   };
 
+  private handleRewardClosed = (): void => {
+    if (this.active) this.scene.start("VillageScene");
+  };
+
   constructor() {
     super("CombatScene");
   }
@@ -75,6 +86,7 @@ export class CombatScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.active = false;
       eventBus.offTyped("challenge:closed", this.handleChallengeClosed);
+      eventBus.offTyped("reward:closed", this.handleRewardClosed);
     });
     this.events.once(Phaser.Scenes.Events.DESTROY, () => {
       this.active = false;
@@ -87,7 +99,8 @@ export class CombatScene extends Phaser.Scene {
     const enemyX = width * 0.75;
     const rowY = height * 0.5;
 
-    this.add.circle(playerX, rowY, 20, data.avatarColor);
+    this.playerShape = this.add.circle(playerX, rowY, 20, data.avatarColor);
+    this.applyEquippedVisual();
     this.add.text(playerX, rowY - 46, data.displayName, { fontSize: "13px", color: "#e9e4ef" }).setOrigin(0.5);
     const playerBars = this.buildHpBar(playerX, rowY + 40);
     this.playerHpFill = playerBars.fill;
@@ -108,8 +121,18 @@ export class CombatScene extends Phaser.Scene {
 
     this.updateHpDisplays();
     eventBus.onTyped("challenge:closed", this.handleChallengeClosed);
+    eventBus.onTyped("reward:closed", this.handleRewardClosed);
 
     this.startRound();
+  }
+
+  /** Draws a ring in the equipped item's visualTint — see VillageScene's identical helper. */
+  private applyEquippedVisual(): void {
+    const player = this.game.registry.get("player") as Player | undefined;
+    if (!player?.equippedItemId) return;
+    const item = findItem(this.game, player.equippedItemId);
+    if (!item) return;
+    this.playerShape.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(item.visualTint).color);
   }
 
   private buildHpBar(
@@ -210,10 +233,70 @@ export class CombatScene extends Phaser.Scene {
       duration: 500,
       onComplete: () => {
         this.time.delayedCall(600, () => {
-          if (this.active) this.scene.start("VillageScene");
+          if (this.active) void this.grantQuestReward();
         });
       },
     });
+  }
+
+  /**
+   * Grants "The Wizard's Missing Words"' reward on this first victory. Known,
+   * deliberate limitation carried over from Phase 8: the Puddlewump's
+   * defeated state isn't persisted across a reload, so a player can in
+   * principle re-fight it and re-grant this reward more than once in a
+   * session — no anti-farming logic exists yet, and building it isn't this
+   * phase's job.
+   */
+  private async grantQuestReward(): Promise<void> {
+    const quest = findQuest(this.game, QUEST_ID);
+    if (!quest) {
+      console.warn(`[CombatScene] Quest "${QUEST_ID}" not found in content — granting no reward.`);
+      eventBus.emitTyped("reward:start", { xpGained: 0, glimmersGained: 0, leveledUp: false, newLevel: 0 });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/player/${this.sceneData.playerId}/reward`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          xp: quest.rewardXp,
+          glimmers: quest.rewardCurrency,
+          itemId: quest.rewardItemId,
+        }),
+      });
+      if (!response.ok) throw new Error(`Server responded ${response.status}`);
+      const result = (await response.json()) as { player: Player; leveledUp: boolean; newLevel: number };
+      if (!this.active) return;
+
+      // The registry copy is what VillageScene/CombatScene read on their next
+      // create() — updating it here (rather than round-tripping through
+      // React state, which would tear down and remount the whole Phaser.Game
+      // instance via GameCanvas's effect) is what makes the equip visual and
+      // XP/level show up correctly next time without a full game reload.
+      this.game.registry.set("player", result.player);
+      saveStoredPlayer(result.player);
+
+      const item = quest.rewardItemId ? findItem(this.game, quest.rewardItemId) : undefined;
+      eventBus.emitTyped("reward:start", {
+        xpGained: quest.rewardXp,
+        glimmersGained: quest.rewardCurrency,
+        leveledUp: result.leveledUp,
+        newLevel: result.newLevel,
+        item: item
+          ? { id: item.id, name: item.name, description: item.description, visualTint: item.visualTint }
+          : undefined,
+      });
+    } catch (cause) {
+      // A failed reward grant never leaves the child stuck on the victory
+      // screen — Phase 0's "never stuck" rule applies here too. The reward
+      // screen still opens so the session can continue; retrying the grant
+      // isn't implemented, it just silently doesn't happen this time.
+      console.error("[CombatScene] Could not grant quest reward:", cause);
+      if (this.active) {
+        eventBus.emitTyped("reward:start", { xpGained: 0, glimmersGained: 0, leveledUp: false, newLevel: 0 });
+      }
+    }
   }
 
   private playDefeat(): void {

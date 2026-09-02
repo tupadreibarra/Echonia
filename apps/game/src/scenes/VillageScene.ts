@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import type { MasteryRecord, Player, ResultTier } from "@echonia/shared-types";
 import { eventBus, type ChallengeOption, type DialogueLine } from "../bridge/eventBus";
 import { resolveAvatarColor } from "../player/avatarColors";
-import { findContentItem } from "../content/getContentItems";
+import { findContentItem, findItem } from "../content/getContentItems";
 
 interface Npc {
   id: string;
@@ -124,6 +124,10 @@ export class VillageScene extends Phaser.Scene {
     this.player = this.add.circle(width / 2, height * 0.8, 16, avatarColor);
     this.physics.add.existing(this.player);
     (this.player.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
+    if (player?.equippedItemId) {
+      const item = findItem(this.game, player.equippedItemId);
+      if (item) this.player.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(item.visualTint).color);
+    }
     this.playerLabel = this.add
       .text(this.player.x, this.player.y - 28, player?.displayName ?? "Hero", {
         fontSize: "11px",

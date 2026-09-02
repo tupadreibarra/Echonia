@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Player } from "@echonia/shared-types";
 import { GameCanvas } from "./GameCanvas";
-import { TalkPrompt, DialogueBox, ChallengeBox, CharacterCreation } from "./ui";
+import { TalkPrompt, DialogueBox, ChallengeBox, CharacterCreation, RewardScreen } from "./ui";
 import { loadStoredPlayer } from "./player/playerStorage";
 
 export function App() {
@@ -32,6 +32,7 @@ export function App() {
         <TalkPrompt />
         <DialogueBox />
         <ChallengeBox />
+        <RewardScreen />
       </div>
     </div>
   );

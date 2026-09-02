@@ -8,6 +8,10 @@ export const players = sqliteTable("players", {
   avatarChoice: text("avatar_choice").notNull(),
   ageBand: text("age_band").notNull(), // "fledgling" | "wordsmith" | "loremaster"
   createdAt: text("created_at").notNull(),
+  xp: integer("xp").notNull().default(0),
+  level: integer("level").notNull().default(1),
+  glimmers: integer("glimmers").notNull().default(0),
+  equippedItemId: text("equipped_item_id"),
 });
 
 export const masteryRecords = sqliteTable("mastery_records", {

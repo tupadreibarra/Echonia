@@ -69,6 +69,21 @@ export interface Player {
   avatarChoice: string;
   ageBand: AgeBand;
   createdAt: string; // ISO timestamp
+  xp: number;
+  level: number;
+  glimmers: number;
+  equippedItemId: string | null;
+}
+
+export type ItemSlot = "accessory";
+
+export interface Item {
+  id: string;
+  name: string;
+  slot: ItemSlot;
+  description: string;
+  /** Hex color string (e.g. "#f0b94a") used to render this item as a placeholder visual — no real art yet. */
+  visualTint: string;
 }
 
 export interface MasteryRecord {

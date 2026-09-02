@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { z } from "zod";
-import { contentItemSchema, questSchema, regionSchema } from "./schema.js";
+import { contentItemSchema, itemSchema, questSchema, regionSchema } from "./schema.js";
 
 // Compiled output lives at dist/loader.js; the authored data/ directory sits
 // one level up, at the package root, alongside dist/.
@@ -49,13 +49,15 @@ export interface LoadedContent {
   regions: Awaited<ReturnType<typeof loadAndValidate<z.infer<typeof regionSchema>>>>;
   contentItems: Awaited<ReturnType<typeof loadAndValidate<z.infer<typeof contentItemSchema>>>>;
   quests: Awaited<ReturnType<typeof loadAndValidate<z.infer<typeof questSchema>>>>;
+  items: Awaited<ReturnType<typeof loadAndValidate<z.infer<typeof itemSchema>>>>;
 }
 
 export async function loadContent(): Promise<LoadedContent> {
-  const [regions, contentItems, quests] = await Promise.all([
+  const [regions, contentItems, quests, items] = await Promise.all([
     loadAndValidate(join(DATA_ROOT, "regions"), regionSchema),
     loadAndValidate(join(DATA_ROOT, "content-items"), contentItemSchema),
     loadAndValidate(join(DATA_ROOT, "quests"), questSchema),
+    loadAndValidate(join(DATA_ROOT, "items"), itemSchema),
   ]);
-  return { regions, contentItems, quests };
+  return { regions, contentItems, quests, items };
 }

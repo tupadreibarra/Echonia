@@ -1,0 +1,7 @@
+{
+  "id": "orins-lantern-charm",
+  "name": "Orin's Lantern Charm",
+  "slot": "accessory",
+  "description": "A small glass charm holding a flicker of Master Orin's own light spell. Warm to the touch.",
+  "visualTint": "#f0b94a"
+}
