@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { ResultTier } from "@echonia/shared-types";
 
 // One line of dialogue. `text` may contain **bold** spans, which the
 // DialogueBox renders as highlighted English — used when a line is
@@ -42,8 +43,12 @@ export interface EchoniaEvents {
   "dialogue:closed": Record<string, never>;
   /** Phaser -> React: open a Select-Image challenge for this word orb. */
   "challenge:start": ChallengeStartPayload;
-  /** React -> Phaser: the challenge resolved and closed; mark the orb done. */
-  "challenge:closed": { contentItemId: string };
+  /**
+   * React -> Phaser: the challenge resolved and closed. `resultTier` is what
+   * lets a listener outside the vocabulary-orb quest (Combat, in Phase 8)
+   * reuse this same box for its own scoring, rather than forking it.
+   */
+  "challenge:closed": { contentItemId: string; resultTier: ResultTier };
 }
 
 class TypedEventBus extends Phaser.Events.EventEmitter {

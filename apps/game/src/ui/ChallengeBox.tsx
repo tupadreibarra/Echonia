@@ -27,6 +27,7 @@ function OptionIcon({ contentItemId }: { contentItemId: string }) {
 interface Feedback {
   correct: boolean;
   message: string;
+  resultTier: ResultTier;
 }
 
 export function ChallengeBox() {
@@ -80,20 +81,23 @@ export function ChallengeBox() {
     void submitAttempt(resultTier);
 
     if (correct) {
-      setFeedback({ correct: true, message: "¡Correcto! Great job!" });
+      setFeedback({ correct: true, message: "¡Correcto! Great job!", resultTier });
     } else {
       const targetOption = active.options.find((o) => o.contentItemId === active.target.contentItemId);
       setFeedback({
         correct: false,
         message: `¡Casi! Era "${targetOption?.spanishText ?? active.target.englishText}". Almost! It was "${active.target.englishText}".`,
+        resultTier,
       });
     }
   }
 
   function handleClose(): void {
+    if (!feedback) return; // only reachable from the feedback branch below, but keeps this safe on its own
     const contentItemId = active.target.contentItemId;
+    const { resultTier } = feedback;
     setChallenge(null);
-    eventBus.emitTyped("challenge:closed", { contentItemId });
+    eventBus.emitTyped("challenge:closed", { contentItemId, resultTier });
   }
 
   return (

@@ -1,7 +1,8 @@
 import Phaser from "phaser";
-import type { ContentItem, MasteryRecord, Player } from "@echonia/shared-types";
+import type { MasteryRecord, Player, ResultTier } from "@echonia/shared-types";
 import { eventBus, type ChallengeOption, type DialogueLine } from "../bridge/eventBus";
 import { resolveAvatarColor } from "../player/avatarColors";
+import { findContentItem } from "../content/getContentItems";
 
 interface Npc {
   id: string;
@@ -34,6 +35,7 @@ interface WasdKeys {
 
 const TALK_RANGE = 64;
 const ORB_RANGE = 40;
+const PUDDLEWUMP_RANGE = 40;
 const PLAYER_SPEED = 180;
 const CLICK_MOVE_STOP_DISTANCE = 6;
 
@@ -53,6 +55,7 @@ export class VillageScene extends Phaser.Scene {
   private npcs: Npc[] = [];
   private npcInRangeId: string | null = null;
   private orbs: Orb[] = [];
+  private puddlewump: { shape: Phaser.GameObjects.Ellipse; rangeZone: Phaser.GameObjects.Arc } | null = null;
   private dialogueOpen = false;
   private challengeOpen = false;
   private questAcknowledged = false;
@@ -62,6 +65,18 @@ export class VillageScene extends Phaser.Scene {
   // hazard BootScene's content fetch hit in Phase 6.
   private active = true;
 
+  // Bound once per instance so they can be removed on shutdown (below) —
+  // `eventBus` is a singleton outside Phaser's scene lifecycle, so without
+  // this, every return trip from CombatScene would stack a fresh set of
+  // listeners on top of the previous VillageScene instance's, and old
+  // instances would keep reacting to events meant for the new one.
+  private handleTalkRequested = ({ npcId }: { npcId: string }): void => this.startDialogue(npcId);
+  private handleDialogueClosed = (): void => {
+    this.dialogueOpen = false;
+  };
+  private handleChallengeClosedBound = ({ contentItemId }: { contentItemId: string; resultTier: ResultTier }): void =>
+    this.onChallengeClosed(contentItemId);
+
   constructor() {
     super("VillageScene");
   }
@@ -70,10 +85,30 @@ export class VillageScene extends Phaser.Scene {
     this.active = true;
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.active = false;
+      eventBus.offTyped("talk:requested", this.handleTalkRequested);
+      eventBus.offTyped("dialogue:closed", this.handleDialogueClosed);
+      eventBus.offTyped("challenge:closed", this.handleChallengeClosedBound);
     });
     this.events.once(Phaser.Scenes.Events.DESTROY, () => {
       this.active = false;
     });
+
+    // Phaser reuses the same VillageScene instance across every
+    // scene.start("VillageScene") call rather than constructing a fresh one
+    // per visit -- class-field initializers only run once, at construction.
+    // this.orbs/this.npcs are unconditionally reassigned below so they're
+    // self-correcting, but every other piece of "what's happening right
+    // now" state has to be reset explicitly here, or it leaks in from
+    // whatever it was on the visit before this one. walkTarget is the one
+    // that actually bit combat: a stale target from the click that walked
+    // the player into the Puddlewump would otherwise make the player
+    // immediately resume walking into wherever it respawns, re-triggering
+    // combat before the player has done anything.
+    this.walkTarget = null;
+    this.npcInRangeId = null;
+    this.dialogueOpen = false;
+    this.challengeOpen = false;
+    this.puddlewump = null;
 
     const { width, height } = this.scale;
 
@@ -139,11 +174,9 @@ export class VillageScene extends Phaser.Scene {
 
     // React tells us when the Talk prompt was pressed, and when the
     // dialogue box / challenge box has been closed (so movement can resume).
-    eventBus.onTyped("talk:requested", ({ npcId }) => this.startDialogue(npcId));
-    eventBus.onTyped("dialogue:closed", () => {
-      this.dialogueOpen = false;
-    });
-    eventBus.onTyped("challenge:closed", ({ contentItemId }) => this.onChallengeClosed(contentItemId));
+    eventBus.onTyped("talk:requested", this.handleTalkRequested);
+    eventBus.onTyped("dialogue:closed", this.handleDialogueClosed);
+    eventBus.onTyped("challenge:closed", this.handleChallengeClosedBound);
 
     this.loadExistingMastery();
 
@@ -160,6 +193,7 @@ export class VillageScene extends Phaser.Scene {
     this.updateMovement();
     this.updateNpcRange();
     this.updateOrbRange();
+    this.updatePuddlewumpRange();
     this.updatePlayerLabelPosition();
   }
 
@@ -234,6 +268,52 @@ export class VillageScene extends Phaser.Scene {
     }
   }
 
+  private updatePuddlewumpRange(): void {
+    if (!this.puddlewump) return;
+    if (this.physics.overlap(this.player, this.puddlewump.rangeZone)) {
+      this.startCombat();
+    }
+  }
+
+  /**
+   * The Puddlewump appears once the vocabulary quest is done and hasn't
+   * already been beaten this session (`puddlewumpDefeated` lives in the
+   * Phaser registry, not on this scene instance, so it survives the
+   * VillageScene recreate that happens on every trip to and from combat —
+   * see CombatScene). A lost fight never sets that flag, so the Puddlewump
+   * is simply spawned again the next time this runs, per Phase 2's "reaching
+   * 0 HP is never a game over" rule.
+   */
+  private maybeSpawnPuddlewump(): void {
+    if (this.puddlewump) return;
+    if (this.game.registry.get("puddlewumpDefeated")) return;
+    if (!this.allOrbsResolved()) return;
+
+    const { width, height } = this.scale;
+    const x = width * 0.45;
+    const y = height * 0.42;
+
+    const shape = this.add.ellipse(x, y, 40, 32, 0x7cc47c);
+    this.add.text(x, y - 28, "Puddlewump", { fontSize: "12px", color: "#e9e4ef" }).setOrigin(0.5);
+    this.physics.add.existing(shape, true);
+    this.physics.add.collider(this.player, shape);
+
+    const rangeZone = this.add.circle(x, y, PUDDLEWUMP_RANGE, 0xffffff, 0);
+    this.physics.add.existing(rangeZone, true);
+
+    this.puddlewump = { shape, rangeZone };
+  }
+
+  private startCombat(): void {
+    if (!this.playerId) return; // shouldn't happen — App requires a player before the game mounts
+    const player = this.game.registry.get("player") as Player | undefined;
+    this.scene.start("CombatScene", {
+      playerId: this.playerId,
+      displayName: player?.displayName ?? "Hero",
+      avatarColor: resolveAvatarColor(player?.avatarChoice),
+    });
+  }
+
   private startDialogue(npcId: string): void {
     const lines = npcId === "orin" ? this.orinDialogue() : this.pipDialogue();
     this.dialogueOpen = true;
@@ -265,6 +345,7 @@ export class VillageScene extends Phaser.Scene {
       this.dialogueOpen = true;
       eventBus.emitTyped("dialogue:start", { lines: this.orinDialogue() });
     }
+    this.maybeSpawnPuddlewump();
   }
 
   private allOrbsResolved(): boolean {
@@ -297,20 +378,12 @@ export class VillageScene extends Phaser.Scene {
           const orb = this.orbs.find((o) => o.contentItemId === record.contentItemId);
           if (orb) this.markOrbResolved(orb);
         }
+        this.maybeSpawnPuddlewump();
       })
       .catch((error: unknown) => {
         if (!this.active) return;
         console.error("[VillageScene] Could not load existing mastery records:", error);
       });
-  }
-
-  private getContentItems(): ContentItem[] {
-    const content = this.game.registry.get("content") as { contentItems: ContentItem[] } | undefined;
-    return content?.contentItems ?? [];
-  }
-
-  private findContentItem(id: string): ContentItem | undefined {
-    return this.getContentItems().find((item) => item.id === id);
   }
 
   private orinDialogue(): DialogueLine[] {
@@ -323,8 +396,8 @@ export class VillageScene extends Phaser.Scene {
       ];
     }
 
-    const hello = this.findContentItem("greet.greetings.hello");
-    const myNameIs = this.findContentItem("greet.greetings.my-name-is");
+    const hello = findContentItem(this.game, "greet.greetings.hello");
+    const myNameIs = findContentItem(this.game, "greet.greetings.my-name-is");
 
     return [
       { speaker: "Master Orin", text: "¡Hola, pequeño héroe! Bienvenido a Emberhollow. Soy el Maestro Orin." },
@@ -344,7 +417,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private pipDialogue(): DialogueLine[] {
-    const hello = this.findContentItem("greet.greetings.hello");
+    const hello = findContentItem(this.game, "greet.greetings.hello");
 
     return [
       {
@@ -388,7 +461,7 @@ export class VillageScene extends Phaser.Scene {
   }
 
   private buildOrb(contentItemId: string, x: number, y: number, color: number): Orb | null {
-    const item = this.findContentItem(contentItemId);
+    const item = findContentItem(this.game, contentItemId);
     if (!item) {
       console.warn(`[VillageScene] Content item "${contentItemId}" not found — skipping its orb.`);
       return null;

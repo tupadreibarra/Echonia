@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import type { Player } from "@echonia/shared-types";
 import { BootScene } from "./scenes/BootScene";
 import { VillageScene } from "./scenes/VillageScene";
+import { CombatScene } from "./scenes/CombatScene";
 
 interface Props {
   player: Player;
@@ -28,7 +29,7 @@ export function GameCanvas({ player }: Props) {
         default: "arcade",
         arcade: { debug: false },
       },
-      scene: [BootScene, VillageScene],
+      scene: [BootScene, VillageScene, CombatScene],
     });
 
     // Scenes read this via `this.game.registry.get("player")` — same pattern
