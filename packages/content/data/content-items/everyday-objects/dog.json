@@ -1,0 +1,16 @@
+{
+  "id": "vocab.everyday-objects.dog",
+  "skillStrand": "vocabulary",
+  "topic": "everyday-objects",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "dog",
+  "spanishText": "perro",
+  "audioUrl": "audio/vocab/dog.mp3",
+  "imageUrl": "sprites/vocab/dog.png",
+  "phoneticHint": "DOG",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "questContext": "wizards-missing-words",
+  "rewardTag": "everyday-objects"
+}

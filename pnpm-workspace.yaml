@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  # better-sqlite3 is only an optional transitive dep of drizzle-kit (we use
+  # the libsql driver instead, see apps/server/src/db/client.ts) - no need to
+  # build its native binary.
+  better-sqlite3: false
+  esbuild: true

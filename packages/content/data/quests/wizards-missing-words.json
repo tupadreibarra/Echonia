@@ -1,0 +1,15 @@
+{
+  "id": "wizards-missing-words",
+  "regionId": "emberhollow",
+  "type": "main",
+  "title": "The Wizard's Missing Words",
+  "npcGiver": "Master Orin",
+  "objectiveContentItemIds": [
+    "vocab.everyday-objects.apple",
+    "vocab.everyday-objects.dog",
+    "vocab.everyday-objects.book"
+  ],
+  "rewardXp": 40,
+  "rewardCurrency": 15,
+  "rewardItemId": "orins-lantern-charm"
+}

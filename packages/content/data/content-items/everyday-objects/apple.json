@@ -1,0 +1,16 @@
+{
+  "id": "vocab.everyday-objects.apple",
+  "skillStrand": "vocabulary",
+  "topic": "everyday-objects",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "apple",
+  "spanishText": "manzana",
+  "audioUrl": "audio/vocab/apple.mp3",
+  "imageUrl": "sprites/vocab/apple.png",
+  "phoneticHint": "AP-uhl",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "questContext": "wizards-missing-words",
+  "rewardTag": "everyday-objects"
+}

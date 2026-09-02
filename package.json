@@ -1,0 +1,17 @@
+{
+  "name": "echonia",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "server:dev": "pnpm --filter @echonia/server dev",
+    "game:dev": "pnpm --filter @echonia/game dev",
+    "typecheck": "pnpm -r run typecheck",
+    "build": "pnpm -r run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

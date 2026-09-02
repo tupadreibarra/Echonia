@@ -1,0 +1,6 @@
+{
+  "id": "emberhollow",
+  "name": "Emberhollow",
+  "description": "The home village. Always safe, always the way back. Master Orin and Pip are found here.",
+  "questIds": ["wizards-missing-words"]
+}

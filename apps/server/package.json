@@ -1,0 +1,28 @@
+{
+  "name": "@echonia/server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @echonia/content run build && tsx watch src/index.ts",
+    "migrate": "pnpm --filter @echonia/content run build && drizzle-kit migrate",
+    "generate": "drizzle-kit generate",
+    "seed": "pnpm --filter @echonia/content run build && tsx src/db/seed.ts",
+    "build": "pnpm --filter @echonia/content run build && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@echonia/content": "workspace:*",
+    "@echonia/shared-types": "workspace:*",
+    "@libsql/client": "^0.14.0",
+    "drizzle-orm": "^0.36.4",
+    "fastify": "^5.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "drizzle-kit": "^0.28.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

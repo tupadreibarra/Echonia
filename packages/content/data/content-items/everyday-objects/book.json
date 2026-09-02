@@ -1,0 +1,16 @@
+{
+  "id": "vocab.everyday-objects.book",
+  "skillStrand": "vocabulary",
+  "topic": "everyday-objects",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "book",
+  "spanishText": "libro",
+  "audioUrl": "audio/vocab/book.mp3",
+  "imageUrl": "sprites/vocab/book.png",
+  "phoneticHint": "BUUK",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "questContext": "wizards-missing-words",
+  "rewardTag": "everyday-objects"
+}
