@@ -24,13 +24,13 @@ const STARTING_TIER_BY_AGE_BAND: Record<AgeBand, number> = {
   loremaster: 6,
 };
 
-function nextBoxLevel(currentBox: number, resultTier: ResultTier): number {
+export function nextBoxLevel(currentBox: number, resultTier: ResultTier): number {
   if (resultTier === "perfect") return Math.min(5, currentBox + 1);
   if (resultTier === "practice") return Math.max(0, currentBox - 2);
   return currentBox; // "good" — box unchanged, per Phase 3's box table
 }
 
-function boxIntervalMs(box: number): number {
+export function boxIntervalMs(box: number): number {
   // `box` is always one of nextBoxLevel's 0-5 outputs, but the Record's
   // index signature still reads as possibly-undefined — the fallback never
   // actually fires.

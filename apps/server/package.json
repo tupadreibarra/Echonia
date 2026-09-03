@@ -9,7 +9,8 @@
     "generate": "drizzle-kit generate",
     "seed": "pnpm --filter @echonia/content run build && tsx src/db/seed.ts",
     "build": "pnpm --filter @echonia/content run build && tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@echonia/content": "workspace:*",
@@ -23,6 +24,7 @@
     "@types/node": "^22.7.5",
     "drizzle-kit": "^0.28.1",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
   }
 }

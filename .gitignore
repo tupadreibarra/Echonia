@@ -27,3 +27,8 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Playwright e2e artifacts (apps/game/e2e/first-quest.spec.ts)
+test-results/
+playwright-report/
+blob-report/

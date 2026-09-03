@@ -41,5 +41,9 @@ export function GameCanvas({ player }: Props) {
     };
   }, [player]);
 
-  return <div ref={containerRef} />;
+  // Phaser's Scale.FIT reads this element's actual rendered size to compute
+  // its fit-to-container scale — it needs an explicit 100% here, since a
+  // bare block div only sizes to its content (the canvas Phaser inserts),
+  // not to the responsive parent box set up in App.tsx.
+  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

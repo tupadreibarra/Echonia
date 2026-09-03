@@ -7,7 +7,13 @@ import { players } from "../db/schema.js";
 import { grantReward } from "../progression/grantReward.js";
 
 const createPlayerSchema = z.object({
-  displayName: z.string().min(1).max(40),
+  // .trim() runs before the length checks below, so a whitespace-only name
+  // (reachable by calling this route directly, bypassing CharacterCreation's
+  // own trim+non-empty check) is correctly rejected as empty rather than
+  // accepted as a blank-looking player. Max matches the client's input cap
+  // (CharacterCreation.tsx's maxLength={20}) — previously 40 here, a latent
+  // mismatch nothing currently exercises through the UI, but worth closing.
+  displayName: z.string().trim().min(1).max(20),
   avatarChoice: z.string().min(1),
   ageBand: z.enum(["fledgling", "wordsmith", "loremaster"]),
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ResultTier } from "@echonia/shared-types";
 import { eventBus, type ChallengeOption, type ChallengeStartPayload } from "../bridge/eventBus";
 import { pronunciationAudioProvider } from "../audio/PronunciationAudioProvider";
@@ -34,12 +34,19 @@ export function ChallengeBox() {
   const [challenge, setChallenge] = useState<ChallengeStartPayload | null>(null);
   const [hintUsed, setHintUsed] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  // A ref, not state: two click events dispatched in the same tick (a fast
+  // double-click/double-tap) both run before React commits the `feedback`
+  // state update from the first one, so checking `feedback` alone let both
+  // calls through and double-recorded one mastery attempt. Refs update
+  // synchronously, so this closes that race where state can't.
+  const answeredRef = useRef(false);
 
   useEffect(() => {
     const handleStart = (payload: ChallengeStartPayload) => {
       setChallenge(payload);
       setHintUsed(false);
       setFeedback(null);
+      answeredRef.current = false;
       void pronunciationAudioProvider.play({
         id: payload.target.contentItemId,
         audioUrl: payload.target.audioUrl,
@@ -74,7 +81,8 @@ export function ChallengeBox() {
   }
 
   function handleSelect(option: ChallengeOption): void {
-    if (feedback) return; // already resolved; ignore extra taps until closed
+    if (answeredRef.current) return; // already resolved this challenge — see answeredRef above
+    answeredRef.current = true;
     const correct = option.contentItemId === active.target.contentItemId;
     const resultTier: ResultTier = correct ? (hintUsed ? "good" : "perfect") : "practice";
 
