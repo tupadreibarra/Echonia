@@ -11,6 +11,7 @@ This project was developed in phases. Design and architecture docs are tracked i
 - **[Phase 4 - MVP Design](docs/phase-4-mvp-design.md)**: the exact Must Have / Should Have / Later feature list for v0.1, with acceptance criteria and a content inventory.
 - **Phases 5-11 - Implementation & Testing**: the actual codebase, built and verified in a real browser at every phase (project scaffold, playable world, learning engine, combat, RPG progression, the complete first quest, then an adversarial testing pass). Tracked via git history, not a separate doc per phase.
 - **[Phase 12 - Next Roadmap](docs/phase-12-next-roadmap.md)**: what's verified vs. still unknown, and a Now/Next/Later plan for what comes after this prototype.
+- **[Playtest Protocol](docs/playtest-protocol.md)**: how to run the real-kid playtesting Phase 12 calls for - recruitment, consent, session structure, an observation guide, and debrief questions.
 
 Each Phase 0-4 and Phase 12 doc links to a styled, illustrated version published as a Claude artifact; the markdown here is the version tracked in git.
 
