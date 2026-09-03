@@ -1,0 +1,15 @@
+{
+  "id": "vocab.colors.yellow",
+  "skillStrand": "vocabulary",
+  "topic": "colors",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "yellow",
+  "spanishText": "amarillo",
+  "audioUrl": "audio/vocab/yellow.mp3",
+  "imageUrl": "sprites/vocab/yellow.png",
+  "phoneticHint": "YEL-oh",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "rewardTag": "colors"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "vocab.everyday-objects.ball",
+  "skillStrand": "vocabulary",
+  "topic": "everyday-objects",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "ball",
+  "spanishText": "pelota",
+  "audioUrl": "audio/vocab/ball.mp3",
+  "imageUrl": "sprites/vocab/ball.png",
+  "phoneticHint": "BAWL",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "rewardTag": "everyday-objects"
+}

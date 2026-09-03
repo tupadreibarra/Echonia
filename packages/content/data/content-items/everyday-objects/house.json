@@ -1,0 +1,15 @@
+{
+  "id": "vocab.everyday-objects.house",
+  "skillStrand": "vocabulary",
+  "topic": "everyday-objects",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "house",
+  "spanishText": "casa",
+  "audioUrl": "audio/vocab/house.mp3",
+  "imageUrl": "sprites/vocab/house.png",
+  "phoneticHint": "HOWS",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "rewardTag": "everyday-objects"
+}

@@ -162,15 +162,24 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private openChallenge(): void {
-    const items = getContentItems(this.game).filter((item) => item.topic === "everyday-objects");
+    // Broadened from a single hardcoded topic ("everyday-objects") to the
+    // whole vocabulary strand, so newer topics (e.g. "colors") actually get
+    // exercised through combat — and therefore through mastery tracking and
+    // tier-drift — instead of sitting unused outside the word-orb quest.
+    const items = getContentItems(this.game).filter((item) => item.skillStrand === "vocabulary");
     if (items.length === 0) {
-      console.warn("[CombatScene] No everyday-objects content items found — cannot open a challenge.");
+      console.warn("[CombatScene] No vocabulary content items found — cannot open a challenge.");
       return;
     }
     const target = items[this.turnIndex % items.length]!;
     this.turnIndex += 1;
 
-    const options: ChallengeOption[] = items.map((item) => ({
+    // Exactly 3 options on screen (target + 2 distractors), regardless of how
+    // large the pool grows — showing every pool item was only ever a no-op
+    // at exactly 3 items; this is what "distractorPool: auto" was always
+    // meant to imply once a topic (or the strand) has more than a couple.
+    const distractors = shuffle(items.filter((item) => item.id !== target.id)).slice(0, 2);
+    const options: ChallengeOption[] = shuffle([target, ...distractors]).map((item) => ({
       contentItemId: item.id,
       englishText: item.englishText,
       spanishText: item.spanishText,
@@ -306,4 +315,14 @@ export class CombatScene extends Phaser.Scene {
       if (this.active) this.scene.start("VillageScene");
     });
   }
+}
+
+/** Fisher-Yates, not sorted-by-random-key — avoids the subtle bias the latter introduces. */
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j]!, result[i]!];
+  }
+  return result;
 }

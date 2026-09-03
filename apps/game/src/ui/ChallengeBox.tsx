@@ -8,18 +8,37 @@ interface OptionVisual {
   color: string;
 }
 
-// Placeholder icons standing in for real illustrations, per Phase 0 §29 — a
-// plain shape per word lets a child tell the three cards apart; real art
-// later only touches this map, not the challenge logic below.
-const OPTION_VISUALS: Record<string, OptionVisual> = {
+// The first three content items ever authored keep their hand-picked look,
+// for visual continuity with earlier screenshots/docs. Everything else
+// (11 items as of the "colors" topic and counting) derives a shape+color
+// from a hash of its id instead — the same pitch-by-id-hash trick
+// PronunciationAudioProvider already uses for the fallback tone — so adding
+// a 12th content item never requires touching this file. A hand-picked
+// look is a bonus for a handful of items, not a requirement for any of them.
+const HAND_PICKED_VISUALS: Record<string, OptionVisual> = {
   "vocab.everyday-objects.apple": { shape: "circle", color: "#e0574a" },
   "vocab.everyday-objects.dog": { shape: "roundedRect", color: "#8b5e34" },
   "vocab.everyday-objects.book": { shape: "rect", color: "#4a7fe0" },
 };
-const DEFAULT_VISUAL: OptionVisual = { shape: "circle", color: "#5c5580" };
+
+const SHAPES: OptionVisual["shape"][] = ["circle", "roundedRect", "rect"];
+// A small curated palette (not an arbitrary hash-to-hex) so every derived
+// color still reads clearly against the challenge card's dark background.
+const PALETTE = ["#e0574a", "#8b5e34", "#4a7fe0", "#3a7d3a", "#9c6a17", "#7c5ce0", "#d14a8f", "#4ab0c4"];
+
+function hashString(value: string): number {
+  return Array.from(value).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+}
+
+function visualFor(contentItemId: string): OptionVisual {
+  const handPicked = HAND_PICKED_VISUALS[contentItemId];
+  if (handPicked) return handPicked;
+  const hash = hashString(contentItemId);
+  return { shape: SHAPES[hash % SHAPES.length]!, color: PALETTE[hash % PALETTE.length]! };
+}
 
 function OptionIcon({ contentItemId }: { contentItemId: string }) {
-  const visual = OPTION_VISUALS[contentItemId] ?? DEFAULT_VISUAL;
+  const visual = visualFor(contentItemId);
   const radius = visual.shape === "circle" ? "50%" : visual.shape === "roundedRect" ? 10 : 2;
   return <div style={{ width: 40, height: 40, background: visual.color, borderRadius: radius }} />;
 }

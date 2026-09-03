@@ -1,0 +1,15 @@
+{
+  "id": "vocab.colors.green",
+  "skillStrand": "vocabulary",
+  "topic": "colors",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "green",
+  "spanishText": "verde",
+  "audioUrl": "audio/vocab/green.mp3",
+  "imageUrl": "sprites/vocab/green.png",
+  "phoneticHint": "GREEN",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "rewardTag": "colors"
+}

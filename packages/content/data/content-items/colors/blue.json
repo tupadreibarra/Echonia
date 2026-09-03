@@ -1,0 +1,15 @@
+{
+  "id": "vocab.colors.blue",
+  "skillStrand": "vocabulary",
+  "topic": "colors",
+  "ageRange": [4, 9],
+  "difficultyTier": 1,
+  "englishText": "blue",
+  "spanishText": "azul",
+  "audioUrl": "audio/vocab/blue.mp3",
+  "imageUrl": "sprites/vocab/blue.png",
+  "phoneticHint": "BLOO",
+  "activityTypes": ["select-image"],
+  "distractorPool": "auto",
+  "rewardTag": "colors"
+}
