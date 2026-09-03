@@ -3,13 +3,20 @@ import type { MasteryRecord, Player, ResultTier } from "@echonia/shared-types";
 import { eventBus, type ChallengeOption, type DialogueLine } from "../bridge/eventBus";
 import { resolveAvatarColor } from "../player/avatarColors";
 import { findContentItem, findItem } from "../content/getContentItems";
+import {
+  ensureHeroTexture,
+  ensureWizardTexture,
+  ensureSpiritTexture,
+  ensureBlobTexture,
+  ensureGrassTileTexture,
+} from "../sprites/spriteFactory";
 
 interface Npc {
   id: string;
   label: string;
   x: number;
   y: number;
-  body: Phaser.GameObjects.Arc;
+  body: Phaser.GameObjects.Image;
   rangeZone: Phaser.GameObjects.Arc;
 }
 
@@ -52,7 +59,8 @@ const CLICK_MOVE_STOP_DISTANCE = 6;
  * scene.
  */
 export class VillageScene extends Phaser.Scene {
-  private player!: Phaser.GameObjects.Arc;
+  private player!: Phaser.GameObjects.Image;
+  private playerEquipRing: Phaser.GameObjects.Arc | null = null;
   private playerLabel!: Phaser.GameObjects.Text;
   private playerId: string | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -61,7 +69,7 @@ export class VillageScene extends Phaser.Scene {
   private npcs: Npc[] = [];
   private npcInRangeId: string | null = null;
   private orbs: Orb[] = [];
-  private puddlewump: { shape: Phaser.GameObjects.Ellipse; rangeZone: Phaser.GameObjects.Arc } | null = null;
+  private puddlewump: { shape: Phaser.GameObjects.Image; rangeZone: Phaser.GameObjects.Arc } | null = null;
   private dialogueOpen = false;
   private challengeOpen = false;
   private questAcknowledged = false;
@@ -122,7 +130,18 @@ export class VillageScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
 
-    this.cameras.main.setBackgroundColor("#2f6b3f"); // village green
+    // Tiled grass instead of one flat fill — covers the full extended width
+    // (see GATE_BEYOND_WIDTH below) so the ground reads consistently once the
+    // gate opens and reveals the strip beyond it. A softer overlay tints that
+    // strip so it still visually reads as "further land," same distinction
+    // the old flat-color rectangle used to carry.
+    const grassKey = ensureGrassTileTexture(this, 0x2f6b3f);
+    this.add.tileSprite(0, 0, width + GATE_BEYOND_WIDTH, height, grassKey).setOrigin(0, 0).setDepth(-3);
+    this.add
+      .rectangle(width, 0, GATE_BEYOND_WIDTH, height, 0x1f4a30, 0.35)
+      .setOrigin(0, 0)
+      .setDepth(-2);
+    this.drawVillagePath(width, height);
 
     // Extended past the gate so there's somewhere to actually walk once it
     // opens — see GATE_BEYOND_WIDTH above.
@@ -133,12 +152,19 @@ export class VillageScene extends Phaser.Scene {
     const avatarColor = resolveAvatarColor(player?.avatarChoice);
 
     // Player (created before props/NPCs/orbs so their colliders can reference it).
-    this.player = this.add.circle(width / 2, height * 0.8, 16, avatarColor);
+    const heroKey = ensureHeroTexture(this, avatarColor);
+    this.player = this.add.image(width / 2, height * 0.8, heroKey);
     this.physics.add.existing(this.player);
     (this.player.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
+    this.playerEquipRing = null;
     if (player?.equippedItemId) {
       const item = findItem(this.game, player.equippedItemId);
-      if (item) this.player.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(item.visualTint).color);
+      if (item) {
+        const tint = Phaser.Display.Color.HexStringToColor(item.visualTint).color;
+        this.playerEquipRing = this.add
+          .circle(this.player.x, this.player.y, 17, 0x000000, 0)
+          .setStrokeStyle(3, tint);
+      }
     }
     this.playerLabel = this.add
       .text(this.player.x, this.player.y - 28, player?.displayName ?? "Hero", {
@@ -148,7 +174,7 @@ export class VillageScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     // Static props (well, fence post, sign, closed gate).
-    this.addProp(width * 0.3, height * 0.35, 28, 0x6b7280, "Well");
+    this.addWell(width * 0.3, height * 0.35);
     this.addProp(width * 0.7, height * 0.25, 14, 0x8b5e34, "Fence Post");
     this.addProp(width * 0.15, height * 0.7, 16, 0x8b5e34, "Sign");
     // Open once the player has equipped the quest's reward — that's the
@@ -171,10 +197,11 @@ export class VillageScene extends Phaser.Scene {
       this.cameras.main.setZoom(1);
     }
 
-    // NPCs.
+    // NPCs. Orin reads as a wizard (robe + hat); Pip is explicitly not
+    // humanoid per Phase 0's lore, so it gets the spirit sparkle instead.
     this.npcs = [
-      this.addNpc("orin", "Master Orin", width * 0.55, height * 0.55, 0x9c6a17),
-      this.addNpc("pip", "Pip", width * 0.62, height * 0.5, 0xf0d94a),
+      this.addNpc("orin", "Master Orin", width * 0.55, height * 0.55, ensureWizardTexture(this, 0x9c6a17)),
+      this.addNpc("pip", "Pip", width * 0.62, height * 0.5, ensureSpiritTexture(this, 0xf0d94a)),
     ];
     for (const npc of this.npcs) {
       this.physics.add.collider(this.player, npc.body);
@@ -234,6 +261,7 @@ export class VillageScene extends Phaser.Scene {
 
   private updatePlayerLabelPosition(): void {
     this.playerLabel.setPosition(this.player.x, this.player.y - 28);
+    this.playerEquipRing?.setPosition(this.player.x, this.player.y);
   }
 
   private updateMovement(): void {
@@ -338,7 +366,7 @@ export class VillageScene extends Phaser.Scene {
     const x = width * 0.45;
     const y = height * 0.42;
 
-    const shape = this.add.ellipse(x, y, 40, 32, 0x7cc47c);
+    const shape = this.add.image(x, y, ensureBlobTexture(this, "spr-puddlewump", 0x7cc47c));
     this.add.text(x, y - 28, "Puddlewump", { fontSize: "12px", color: "#e9e4ef" }).setOrigin(0.5);
     this.physics.add.existing(shape, true);
     this.physics.add.collider(this.player, shape);
@@ -482,6 +510,28 @@ export class VillageScene extends Phaser.Scene {
     this.physics.add.collider(this.player, prop);
   }
 
+  /** A slightly more built-up prop than a flat circle: a rim highlight and a dark well mouth. */
+  private addWell(x: number, y: number): void {
+    const radius = 28;
+    this.add.circle(x, y, radius, 0x8a95a3);
+    const mouth = this.add.circle(x, y, radius * 0.62, 0x2a2440);
+    this.physics.add.existing(mouth, true);
+    this.add.text(x, y - radius - 12, "Well", { fontSize: "12px", color: "#e9e4ef" }).setOrigin(0.5);
+    this.physics.add.collider(this.player, mouth);
+  }
+
+  /** A simple tan path connecting the entrance to the village center and on toward the gate. */
+  private drawVillagePath(width: number, height: number): void {
+    const path = this.add.graphics().setDepth(-1);
+    path.lineStyle(30, 0xc9a66b, 0.9);
+    path.beginPath();
+    path.moveTo(width * 0.5, height * 1.02);
+    path.lineTo(width * 0.5, height * 0.62);
+    path.lineTo(width * 0.58, height * 0.53);
+    path.lineTo(width * 0.9, height * 0.5);
+    path.strokePath();
+  }
+
   private addGate(x: number, y: number, isOpen: boolean): void {
     this.gateOpen = isOpen;
     const gate = this.add.rectangle(x, y, 24, 140, isOpen ? 0x3a7d3a : 0x5c5580);
@@ -496,9 +546,10 @@ export class VillageScene extends Phaser.Scene {
     // Cosmetic-only strip past the gate (not a new region — see
     // GATE_BEYOND_WIDTH above) so the pull-back below reveals something
     // instead of empty canvas, plus a silent trigger zone within it for the
-    // one-line closing beat once the player actually steps through.
+    // one-line closing beat once the player actually steps through. The
+    // ground tile + tint overlay drawn in create() already cover this area
+    // visually — nothing to draw here but the label and the trigger zone.
     const beyondX = x + 20 + GATE_BEYOND_WIDTH / 2;
-    this.add.rectangle(beyondX, y, GATE_BEYOND_WIDTH, this.scale.height, 0x3f7a4f).setDepth(-1);
     this.add
       .text(beyondX, this.scale.height * 0.15, "The road continues...", { fontSize: "12px", color: "#cfe8d6" })
       .setOrigin(0.5)
@@ -540,8 +591,8 @@ export class VillageScene extends Phaser.Scene {
     }
   }
 
-  private addNpc(id: string, label: string, x: number, y: number, color: number): Npc {
-    const body = this.add.circle(x, y, 18, color);
+  private addNpc(id: string, label: string, x: number, y: number, textureKey: string): Npc {
+    const body = this.add.image(x, y, textureKey);
     this.physics.add.existing(body, true);
     this.add.text(x, y - 32, label, { fontSize: "12px", color: "#e9e4ef" }).setOrigin(0.5);
 

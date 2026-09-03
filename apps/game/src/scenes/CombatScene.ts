@@ -3,6 +3,7 @@ import type { Player, ResultTier } from "@echonia/shared-types";
 import { eventBus, type ChallengeOption } from "../bridge/eventBus";
 import { getContentItems, findQuest, findItem } from "../content/getContentItems";
 import { saveStoredPlayer } from "../player/playerStorage";
+import { ensureHeroTexture, ensureBlobTexture } from "../sprites/spriteFactory";
 
 // The one quest that exists in this MVP — its reward is granted on victory.
 // A named constant rather than a scene-data field since nothing yet needs a
@@ -49,8 +50,7 @@ export class CombatScene extends Phaser.Scene {
   // Same StrictMode/scene-teardown guard as VillageScene and BootScene.
   private active = true;
 
-  private playerShape!: Phaser.GameObjects.Arc;
-  private enemyShape!: Phaser.GameObjects.Ellipse;
+  private enemyShape!: Phaser.GameObjects.Image;
   private playerHpText!: Phaser.GameObjects.Text;
   private enemyHpText!: Phaser.GameObjects.Text;
   private playerHpFill!: Phaser.GameObjects.Rectangle;
@@ -99,14 +99,14 @@ export class CombatScene extends Phaser.Scene {
     const enemyX = width * 0.75;
     const rowY = height * 0.5;
 
-    this.playerShape = this.add.circle(playerX, rowY, 20, data.avatarColor);
-    this.applyEquippedVisual();
+    this.add.image(playerX, rowY, ensureHeroTexture(this, data.avatarColor));
+    this.applyEquippedVisual(playerX, rowY);
     this.add.text(playerX, rowY - 46, data.displayName, { fontSize: "13px", color: "#e9e4ef" }).setOrigin(0.5);
     const playerBars = this.buildHpBar(playerX, rowY + 40);
     this.playerHpFill = playerBars.fill;
     this.playerHpText = playerBars.text;
 
-    this.enemyShape = this.add.ellipse(enemyX, rowY, 56, 44, 0x7cc47c);
+    this.enemyShape = this.add.image(enemyX, rowY, ensureBlobTexture(this, "spr-puddlewump", 0x7cc47c));
     this.add.text(enemyX, rowY - 46, "Puddlewump", { fontSize: "13px", color: "#e9e4ef" }).setOrigin(0.5);
     const enemyBars = this.buildHpBar(enemyX, rowY + 40);
     this.enemyHpFill = enemyBars.fill;
@@ -127,12 +127,13 @@ export class CombatScene extends Phaser.Scene {
   }
 
   /** Draws a ring in the equipped item's visualTint — see VillageScene's identical helper. */
-  private applyEquippedVisual(): void {
+  private applyEquippedVisual(x: number, y: number): void {
     const player = this.game.registry.get("player") as Player | undefined;
     if (!player?.equippedItemId) return;
     const item = findItem(this.game, player.equippedItemId);
     if (!item) return;
-    this.playerShape.setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(item.visualTint).color);
+    const tint = Phaser.Display.Color.HexStringToColor(item.visualTint).color;
+    this.add.circle(x, y, 21, 0x000000, 0).setStrokeStyle(3, tint);
   }
 
   private buildHpBar(
