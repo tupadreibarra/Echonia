@@ -16,13 +16,55 @@ const BOX_INTERVALS_MS: Record<number, number> = {
 };
 
 // Starting effectiveDifficultyTier by age band, per Phase 3's age-band table
-// (the low end of each band's starting range). Tier drift off of this
-// baseline is explicitly a later phase — see recordAttempt below.
+// (the low end of each band's starting range).
 const STARTING_TIER_BY_AGE_BAND: Record<AgeBand, number> = {
   fledgling: 1,
   wordsmith: 3,
   loremaster: 6,
 };
+
+// Tier-drift cap per age band: the high end of each band's starting range,
+// plus 2, per Phase 3's "capped at age-band range + 2" rule.
+// Fledgling 1-2 -> 4, Wordsmith 3-5 -> 7, Loremaster 6-8 -> 10.
+const TIER_CAP_BY_AGE_BAND: Record<AgeBand, number> = {
+  fledgling: 4,
+  wordsmith: 7,
+  loremaster: 10,
+};
+
+const TIER_FLOOR = 1;
+const TIER_DRIFT_MIN_ATTEMPTS = 15;
+const TIER_DRIFT_UP_THRESHOLD = 85;
+const TIER_DRIFT_DOWN_THRESHOLD = 40;
+
+/**
+ * Phase 3's rule is "masteryScore sustained above 85 / below 40 across the
+ * last 15 attempts" — a literal sliding window over individual attempt
+ * events. Building that would need a per-attempt log table: MasteryRecord
+ * only keeps aggregates (totalAttempts, totalCorrect, ...), not per-attempt
+ * history, and adding one is disproportionate to what 3-5 content items can
+ * actually exercise right now. This uses the aggregate data that already
+ * exists instead: the strand's total attempts (summed across its
+ * MasteryRecords) as the sample-size gate, and the already-computed rolling
+ * masteryScore as the trigger metric, in place of a literal windowed
+ * recompute. This is a deliberate substitution, not the literal algorithm
+ * from the docs — revisit if/when a real attempt-log exists.
+ */
+export function computeTierDrift(
+  currentTier: number,
+  ageBand: AgeBand,
+  masteryScore: number,
+  totalAttemptsInStrand: number,
+): number {
+  if (totalAttemptsInStrand < TIER_DRIFT_MIN_ATTEMPTS) return currentTier;
+  if (masteryScore > TIER_DRIFT_UP_THRESHOLD) {
+    return Math.min(TIER_CAP_BY_AGE_BAND[ageBand], currentTier + 1);
+  }
+  if (masteryScore < TIER_DRIFT_DOWN_THRESHOLD) {
+    return Math.max(TIER_FLOOR, currentTier - 1);
+  }
+  return currentTier;
+}
 
 export function nextBoxLevel(currentBox: number, resultTier: ResultTier): number {
   if (resultTier === "perfect") return Math.min(5, currentBox + 1);
@@ -88,11 +130,9 @@ export async function recordAttempt(input: RecordAttemptInput) {
 /**
  * Recomputes the player's rolling masteryScore for one skill strand as a
  * simple average of box levels (0-5) across every ContentItem they've
- * attempted in that strand, scaled to 0-100. `effectiveDifficultyTier` is
- * left untouched here — the 85/40-over-15-attempts tier-drift rule needs
- * more content and usage than exists yet (docs/phase-4-mvp-design.md's
- * Later list), so it's only ever set once, from the player's age band, the
- * first time a strand is seen.
+ * attempted in that strand, scaled to 0-100, then applies tier drift
+ * (computeTierDrift above) on top of whatever tier the strand already sits
+ * at (or the age-band default, the first time this strand is seen).
  */
 async function refreshSkillMastery(playerId: string, skillStrand: SkillStrand): Promise<void> {
   const { contentItems } = await loadContent();
@@ -109,24 +149,28 @@ async function refreshSkillMastery(playerId: string, skillStrand: SkillStrand): 
       : Math.round(
           (recordsInStrand.reduce((sum, record) => sum + record.boxLevel, 0) / recordsInStrand.length / 5) * 100,
         );
+  const totalAttemptsInStrand = recordsInStrand.reduce((sum, record) => sum + record.totalAttempts, 0);
 
   const nowIso = new Date().toISOString();
+
+  const [player] = await db.select().from(players).where(eq(players.id, playerId));
+  const ageBand = (player?.ageBand as AgeBand) ?? "wordsmith";
 
   const [existingSkill] = await db
     .select()
     .from(skillMastery)
     .where(and(eq(skillMastery.playerId, playerId), eq(skillMastery.skillStrand, skillStrand)));
 
+  const baselineTier = existingSkill?.effectiveDifficultyTier ?? STARTING_TIER_BY_AGE_BAND[ageBand];
+  const effectiveDifficultyTier = computeTierDrift(baselineTier, ageBand, masteryScore, totalAttemptsInStrand);
+
   if (existingSkill) {
     await db
       .update(skillMastery)
-      .set({ masteryScore, updatedAt: nowIso })
+      .set({ masteryScore, effectiveDifficultyTier, updatedAt: nowIso })
       .where(and(eq(skillMastery.playerId, playerId), eq(skillMastery.skillStrand, skillStrand)));
     return;
   }
-
-  const [player] = await db.select().from(players).where(eq(players.id, playerId));
-  const effectiveDifficultyTier = STARTING_TIER_BY_AGE_BAND[(player?.ageBand as AgeBand) ?? "wordsmith"];
 
   await db.insert(skillMastery).values({
     playerId,

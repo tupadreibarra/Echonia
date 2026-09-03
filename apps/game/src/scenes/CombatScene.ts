@@ -221,10 +221,10 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private playVictory(): void {
-    // Registry, not an instance field, so it survives the VillageScene
-    // recreate that happens when we transition back — see
-    // VillageScene.maybeSpawnPuddlewump.
-    this.game.registry.set("puddlewumpDefeated", true);
+    // No "defeated" flag to set here anymore — VillageScene.maybeSpawnPuddlewump
+    // now derives "don't spawn it again" from the player's equippedItemId,
+    // which grantQuestReward below sets in the registry (and persists) once
+    // the reward actually grants. See that method's comment for why.
     this.messageText.setText("Victory!");
     this.tweens.add({
       targets: this.enemyShape,
@@ -240,12 +240,10 @@ export class CombatScene extends Phaser.Scene {
   }
 
   /**
-   * Grants "The Wizard's Missing Words"' reward on this first victory. Known,
-   * deliberate limitation carried over from Phase 8: the Puddlewump's
-   * defeated state isn't persisted across a reload, so a player can in
-   * principle re-fight it and re-grant this reward more than once in a
-   * session — no anti-farming logic exists yet, and building it isn't this
-   * phase's job.
+   * Grants "The Wizard's Missing Words"' reward on this first victory. Since
+   * the Puddlewump no longer spawns once equippedItemId is set (see
+   * VillageScene.maybeSpawnPuddlewump), this can only run once per player —
+   * closing the reward-farming gap Phase 8/9 had left open.
    */
   private async grantQuestReward(): Promise<void> {
     const quest = findQuest(this.game, QUEST_ID);

@@ -311,17 +311,27 @@ export class VillageScene extends Phaser.Scene {
   }
 
   /**
-   * The Puddlewump appears once the vocabulary quest is done and hasn't
-   * already been beaten this session (`puddlewumpDefeated` lives in the
-   * Phaser registry, not on this scene instance, so it survives the
-   * VillageScene recreate that happens on every trip to and from combat —
-   * see CombatScene). A lost fight never sets that flag, so the Puddlewump
-   * is simply spawned again the next time this runs, per Phase 2's "reaching
-   * 0 HP is never a game over" rule.
+   * The Puddlewump appears once the vocabulary quest is done, and stops
+   * appearing for good once its reward has actually been equipped — derived
+   * from the player's persisted `equippedItemId` (same "reuse data that
+   * already has to exist" pattern as orb-resolved state, Phase 7, and
+   * gate-open state, Phase 10), not a session-only flag. That used to be an
+   * in-memory `puddlewumpDefeated` registry flag, which reset on reload and
+   * let a player re-fight and re-grant the reward indefinitely; equippedItemId
+   * survives a reload (it's loaded from the server/localStorage on boot and
+   * updated in the registry the moment the reward grant succeeds — see
+   * CombatScene.grantQuestReward), so this closes that gap. It also means a
+   * failed reward grant (network error mid-victory) correctly leaves the
+   * Puddlewump fightable again next visit, instead of permanently losing the
+   * reward for that session — a fix that fell out of the persistence switch,
+   * not a separate change. A lost fight never sets equippedItemId, so the
+   * Puddlewump is simply spawned again the next time this runs, per Phase 2's
+   * "reaching 0 HP is never a game over" rule.
    */
   private maybeSpawnPuddlewump(): void {
     if (this.puddlewump) return;
-    if (this.game.registry.get("puddlewumpDefeated")) return;
+    const player = this.game.registry.get("player") as Player | undefined;
+    if (player?.equippedItemId) return;
     if (!this.allOrbsResolved()) return;
 
     const { width, height } = this.scale;
